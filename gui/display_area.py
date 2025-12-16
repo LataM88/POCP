@@ -207,3 +207,78 @@ class DisplayArea(ttk.Frame):
         self._update_image('L', l_img, explicit_size=target_size)
         self._update_image('a', a_img, explicit_size=target_size)
         self._update_image('b', b_img, explicit_size=target_size)
+
+    def setup_layout_hsl(self, original_img, h_img, s_img, l_img):
+        """Układ dla HSL: Siatka 2x2."""
+        self.clear_widgets()
+        self.update_idletasks()
+        
+        win_w = self.winfo_width(); win_h = self.winfo_height()
+        if win_w < 100: win_w = 800
+        if win_h < 100: win_h = 600
+        target_size = (win_w // 2 - 30, win_h // 2 - 40)
+
+        self.columnconfigure(0, weight=1, uniform='hsl_cols')
+        self.columnconfigure(1, weight=1, uniform='hsl_cols')
+        self.rowconfigure(0, weight=1, uniform='hsl_rows')
+        self.rowconfigure(1, weight=1, uniform='hsl_rows')
+        
+        self.create_panel(self, 'RGB', 'original_panel', 0, 0)
+        self.create_panel(self, 'H', 'ch_h', 0, 1)
+        self.create_panel(self, 'S', 'ch_s', 1, 0)
+        self.create_panel(self, 'L', 'ch_l_hsl', 1, 1)
+        
+        self._update_image('RGB', original_img, explicit_size=target_size)
+        self._update_image('H', h_img, explicit_size=target_size)
+        self._update_image('S', s_img, explicit_size=target_size)
+        self._update_image('L', l_img, explicit_size=target_size)
+
+    def setup_layout_luv(self, original_img, l_img, u_img, v_img):
+        """Układ dla LUV: Siatka 2x2."""
+        self.clear_widgets()
+        self.update_idletasks()
+        
+        win_w = self.winfo_width(); win_h = self.winfo_height()
+        if win_w < 100: win_w = 800
+        if win_h < 100: win_h = 600
+        target_size = (win_w // 2 - 30, win_h // 2 - 40)
+
+        self.columnconfigure(0, weight=1, uniform='luv_cols')
+        self.columnconfigure(1, weight=1, uniform='luv_cols')
+        self.rowconfigure(0, weight=1, uniform='luv_rows')
+        self.rowconfigure(1, weight=1, uniform='luv_rows')
+        
+        self.create_panel(self, 'RGB', 'original_panel', 0, 0)
+        self.create_panel(self, 'L', 'ch_l_luv', 0, 1)
+        self.create_panel(self, 'u', 'ch_u', 1, 0)
+        self.create_panel(self, 'v', 'ch_v', 1, 1)
+        
+        self._update_image('RGB', original_img, explicit_size=target_size)
+        self._update_image('L', l_img, explicit_size=target_size)
+        self._update_image('u', u_img, explicit_size=target_size)
+        self._update_image('v', v_img, explicit_size=target_size)
+
+    def setup_layout_ycbcr(self, original_img, y_img, cb_img, cr_img):
+        """Układ dla YCbCr: Siatka 2x2."""
+        self.clear_widgets()
+        self.update_idletasks()
+        
+        win_w = self.winfo_width(); win_h = self.winfo_height()
+        if win_w < 100: win_w = 800
+        if win_h < 100: win_h = 600
+        target_size = (win_w // 2 - 30, win_h // 2 - 40)
+
+        self.columnconfigure(0, weight=1, uniform='ycbcr_cols')
+        self.columnconfigure(1, weight=1, uniform='ycbcr_cols')
+        self.rowconfigure(0, weight=1, uniform='ycbcr_rows')
+        self.rowconfigure(1, weight=1, uniform='ycbcr_rows')
+        
+        self.create_panel(self, 'RGB', 'original_panel', 0, 0)
+        self.create_panel(self, 'Y', 'ch_y_ycbcr', 0, 1)
+        self.create_panel(self, 'Cb', 'ch_cb', 1, 0)
+        self.create_panel(self, 'Cr', 'ch_cr', 1, 1)
+        
+        self._update_image('RGB', original_img, explicit_size=target_size)
+        self._update_image('Y', y_img, explicit_size=target_size)
+        self._update_image('Cb', cb_img, explicit_size=target_size)
+        self._update_image('Cr', cr_img, explicit_size=target_size)

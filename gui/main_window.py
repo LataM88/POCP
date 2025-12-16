@@ -5,7 +5,7 @@ import datetime # Potrzebne do generowania unikalnych nazw plików
 
 from gui.display_area import DisplayArea
 from gui.language_manager import LanguageManager
-from conversion.converters import rgb_to_xyz, rgb_to_cmyk, rgb_to_lab, colorize_channel
+from conversion.converters import rgb_to_xyz, rgb_to_cmyk, rgb_to_lab, rgb_to_hsl, rgb_to_luv, rgb_to_ycbcr, colorize_channel
 from image_processing.image_loader import load_image, array_to_pil, save_image
 
 class MainWindow(tk.Tk):
@@ -15,18 +15,29 @@ class MainWindow(tk.Tk):
         
         self.lang = LanguageManager()
         self.title(self.lang.get('window_title'))
-        self.geometry("1400x800")
+        # Maksymalizacja okna dla lepszej widoczności przy dużym skalowaniu (np. 225%)
+        self.state('zoomed') 
         
         self.current_image = None
         self.current_image_path = None
+        
+        # Przechowuje gotowe obrazy PIL do wyświetlenia/zapisu (np. pokolorowane lub szare)
         self.converted_channels = None
+        
+        # Przechowuje SUROWE dane kanałów (numpy arrays) do ponownego generowania widoku
+        # Format: {'mode': 'CMYK', 'channels': {'C': array, 'M': array...}, 'rgb': array}
+        self.raw_converted_data = None
         
         # Zmienne do obsługi statusu (żeby działało tłumaczenie po zmianie języka)
         self.current_status_key = 'status_ready'
         self.current_status_params = {}
         
-        self.images_folder = os.path.join(os.path.expanduser("~"), "Documents", "images")
-        self.convert_folder = os.path.join(os.path.expanduser("~"), "Documents", "convert")
+        # Ustalanie ścieżek względem głównego folderu projektu (gdzie jest main.py)
+        # gui/main_window.py -> gui/ -> .. (project root)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        self.images_folder = os.path.join(project_root, "zdjecia")
+        self.convert_folder = os.path.join(project_root, "zapisane")
         
         os.makedirs(self.images_folder, exist_ok=True)
         os.makedirs(self.convert_folder, exist_ok=True)
@@ -41,8 +52,14 @@ class MainWindow(tk.Tk):
         self.load_button.pack(side='left', padx=5)
         
         self.mode_var = tk.StringVar(value="XYZ")
-        self.mode_combo = ttk.Combobox(control_frame, textvariable=self.mode_var, values=["XYZ", "CMYK", "LAB"], state="readonly", width=10)
+        # Zmiana: Przywrócenie XYZ/LUV
+        self.mode_combo = ttk.Combobox(control_frame, textvariable=self.mode_var, values=["XYZ", "CMYK", "LAB", "HSL", "LUV", "YCbCr"], state="readonly", width=10)
         self.mode_combo.pack(side='left', padx=5)
+        
+        # Checkbox dla trybu szarości
+        self.grayscale_var = tk.BooleanVar(value=False)
+        self.grayscale_check = ttk.Checkbutton(control_frame, text=self.lang.get('grayscale_view'), variable=self.grayscale_var, command=self.update_view_mode)
+        self.grayscale_check.pack(side='left', padx=5)
         
         self.convert_button = ttk.Button(control_frame, text=self.lang.get('convert_button'), command=self.convert_image)
         self.convert_button.pack(side='left', padx=5)
@@ -60,7 +77,6 @@ class MainWindow(tk.Tk):
             command=self.toggle_language
         )
         self.flag_button.pack()
-        
         self.status_label = ttk.Label(self, text=self.lang.get('status_ready'), foreground="green")
         self.status_label.pack(side='top', fill='x', padx=10)
         
@@ -94,6 +110,7 @@ class MainWindow(tk.Tk):
         self.load_button.config(text=self.lang.get('load_button'))
         self.save_button.config(text=self.lang.get('save_button'))
         self.convert_button.config(text=self.lang.get('convert_button'))
+        self.grayscale_check.config(text=self.lang.get('grayscale_view')) # Update text
         self.lang_frame.config(text=self.lang.get('language_frame'))
         self.flag_button.config(text=self.lang.get_flag_emoji() + " " + self.lang.current_language)
         
@@ -105,13 +122,14 @@ class MainWindow(tk.Tk):
         self.display_area.refresh_labels()
     
     def load_image(self):
-        path = filedialog.askopenfilename()
+        path = filedialog.askopenfilename(initialdir=self.images_folder)
         if not path: return
         
         try:
             self.current_image = load_image(path)
             self.current_image_path = path
             self.converted_channels = None
+            self.raw_converted_data = None # Reset raw data
             
             pil_img = array_to_pil(self.current_image)
             self.display_area.show_preview(pil_img)
@@ -123,6 +141,11 @@ class MainWindow(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", str(e))
             self.update_status('status_error_load', color="red")
+
+    def update_view_mode(self):
+        """Callback dla checkboxa Grayscale - odświeża widok bez ponownej konwersji."""
+        if self.raw_converted_data:
+            self.refresh_display_images()
 
     def convert_image(self):
         if self.current_image is None:
@@ -136,59 +159,125 @@ class MainWindow(tk.Tk):
         self.update() # Wymuś odświeżenie GUI
         
         try:
+            # 1. Konwersja matematyczna
+            raw_channels = {}
+            
             if mode == "XYZ":
                 xyz = rgb_to_xyz(self.current_image)
-                # Używamy 'Y_XYZ' dla luminancji (zielony)
-                img_x = array_to_pil(colorize_channel(xyz[:,:,0], 'X'))
-                img_y = array_to_pil(colorize_channel(xyz[:,:,1], 'Y_XYZ')) 
-                img_z = array_to_pil(colorize_channel(xyz[:,:,2], 'Z'))
-                
-                self.converted_channels = {'X': img_x, 'Y': img_y, 'Z': img_z, 'RGB': pil_original}
-                self.display_area.setup_layout_xyz(pil_original, img_x, img_y, img_z)
+                raw_channels = {'X': xyz[:,:,0], 'Y': xyz[:,:,1], 'Z': xyz[:,:,2]}
                 
             elif mode == "CMYK":
                 cmyk = rgb_to_cmyk(self.current_image)
-                # Używamy 'Yellow' dla żółtego (żółty)
-                img_c = array_to_pil(colorize_channel(cmyk[:,:,0], 'C'))
-                img_m = array_to_pil(colorize_channel(cmyk[:,:,1], 'M'))
-                img_y = array_to_pil(colorize_channel(cmyk[:,:,2], 'Yellow')) 
-                img_k = array_to_pil(colorize_channel(cmyk[:,:,3], 'K'))
-                
-                self.converted_channels = {'C': img_c, 'M': img_m, 'Y': img_y, 'K': img_k, 'RGB': pil_original}
-                self.display_area.setup_layout_cmyk(pil_original, img_c, img_m, img_y, img_k)
+                raw_channels = {'C': cmyk[:,:,0], 'M': cmyk[:,:,1], 'Y': cmyk[:,:,2], 'K': cmyk[:,:,3]}
             
             elif mode == "LAB":
                 lab = rgb_to_lab(self.current_image)
-                # Używamy realistycznej wizualizacji Lab -> RGB (konwersja odwrotna)
-                img_l = array_to_pil(colorize_channel(lab[:,:,0], 'L_rgb'))
-                img_a = array_to_pil(colorize_channel(lab[:,:,1], 'a_rgb'))
-                img_b = array_to_pil(colorize_channel(lab[:,:,2], 'b_rgb'))
+                raw_channels = {'L': lab[:,:,0], 'a': lab[:,:,1], 'b': lab[:,:,2]}
 
-                self.converted_channels = {'L': img_l, 'a': img_a, 'b': img_b, 'RGB': pil_original}
-                self.display_area.setup_layout_lab(pil_original, img_l, img_a, img_b)
+            elif mode == "HSL":
+                hsl = rgb_to_hsl(self.current_image)
+                raw_channels = {'H': hsl[:,:,0], 'S': hsl[:,:,1], 'L': hsl[:,:,2]}
+
+            elif mode == "LUV":
+                luv = rgb_to_luv(self.current_image)
+                raw_channels = {'L': luv[:,:,0], 'u': luv[:,:,1], 'v': luv[:,:,2]}
+
+            elif mode == "YCbCr":
+                ycbcr = rgb_to_ycbcr(self.current_image)
+                raw_channels = {'Y': ycbcr[:,:,0], 'Cb': ycbcr[:,:,1], 'Cr': ycbcr[:,:,2]}
+
+            # Zapisz dane surowe, żeby móc przełączać widok
+            self.raw_converted_data = {
+                'mode': mode,
+                'channels': raw_channels,
+                'rgb': self.current_image
+            }
+            
+            # 2. Generowanie obrazków i wyświetlanie
+            self.refresh_display_images()
 
             self.update_status('status_converted', color="green")
             
         except Exception as e:
             messagebox.showerror("Error", str(e))
-            print(e)
+            import traceback
+            traceback.print_exc()
             self.update_status('status_error_convert', color="red")
+
+    def refresh_display_images(self):
+        """Generuje obrazy PIL na podstawie raw_converted_data i aktualnych ustawień (np. grayscale)."""
+        if not self.raw_converted_data:
+            return
+
+        mode = self.raw_converted_data['mode']
+        channels_data = self.raw_converted_data['channels']
+        original_rgb = self.raw_converted_data['rgb']
+        
+        is_grayscale = self.grayscale_var.get()
+        
+        pil_original = array_to_pil(original_rgb)
+        pil_channels = {}
+        
+        # Helper map
+        channel_type_map = {
+            'X': 'X', 'Y': 'Y_XYZ', 'Z': 'Z',
+            'C': 'C', 'M': 'M',  'K': 'K', # Yellow handled below
+            'L': 'L', 'a': 'a', 'b': 'b',
+            'u': 'u', 'v': 'v',
+            'H': 'H', 'S': 'S',
+            'Y_ycbcr': 'Y_ycbcr', 'Cb': 'Cb', 'Cr': 'Cr'
+        }
+        
+        generated_imgs = {}
+        
+        for key, data in channels_data.items():
+            ctype = key
+            
+            # Special handling for ambiguous keys
+            if mode == 'CMYK' and key == 'Y': ctype = 'Yellow'
+            elif mode == 'XYZ' and key == 'Y': ctype = 'Y_XYZ'
+            elif mode == 'YCbCr' and key == 'Y': ctype = 'Y_ycbcr'
+            elif mode == 'HSL' and key == 'L': ctype = 'L_hsl'
+            elif mode == 'LUV' and key == 'L': ctype = 'L_luv'
+            elif key in channel_type_map: ctype = channel_type_map[key]
+            
+            res_array = colorize_channel(data, ctype, grayscale=is_grayscale)
+            generated_imgs[key] = array_to_pil(res_array)
+        
+        self.converted_channels = generated_imgs
+        self.converted_channels['RGB'] = pil_original
+        
+        # Wywołanie layoutu
+        if mode == "XYZ":
+             self.display_area.setup_layout_xyz(pil_original, generated_imgs['X'], generated_imgs['Y'], generated_imgs['Z'])
+        elif mode == "CMYK":
+            self.display_area.setup_layout_cmyk(pil_original, generated_imgs['C'], generated_imgs['M'], generated_imgs['Y'], generated_imgs['K'])
+        elif mode == "LAB":
+            self.display_area.setup_layout_lab(pil_original, generated_imgs['L'], generated_imgs['a'], generated_imgs['b'])
+        elif mode == "HSL":
+            self.display_area.setup_layout_hsl(pil_original, generated_imgs['H'], generated_imgs['S'], generated_imgs['L'])
+        elif mode == "LUV":
+            self.display_area.setup_layout_luv(pil_original, generated_imgs['L'], generated_imgs['u'], generated_imgs['v'])
+        elif mode == "YCbCr":
+            self.display_area.setup_layout_ycbcr(pil_original, generated_imgs['Y'], generated_imgs['Cb'], generated_imgs['Cr'])
 
     def save_results(self):
         if not self.converted_channels:
             return
         
         base_name = os.path.splitext(os.path.basename(self.current_image_path))[0]
-        
-        # --- NOWOŚĆ: Dodajemy znacznik czasu do nazwy plików ---
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Np. nazwa pliku: image_X_20231027_153022.png
         
         saved_count = 0
         for name, img in self.converted_channels.items():
             if name == 'RGB': continue
             
-            filename = f"{base_name}_{name}_{timestamp}.png"
+            # Add '_gray' suffix if in grayscale mode
+            suffix = ""
+            if self.grayscale_var.get():
+                suffix = "_gray"
+                
+            filename = f"{base_name}_{name}{suffix}_{timestamp}.png"
             path = os.path.join(self.convert_folder, filename)
             img.save(path)
             saved_count += 1

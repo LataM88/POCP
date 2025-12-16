@@ -125,100 +125,224 @@ def rgb_to_cmyk(rgb_image):
     cmyk = np.dstack((C, M, Y, K))
     return np.clip(cmyk, 0, 1)
 
-def colorize_channel(channel_data, channel_type):
+    return output
+
+def rgb_to_hsl(rgb_image):
+    """Konwertuje obraz RGB (0-255) do HSL (H: 0-360, S: 0-1, L: 0-1)."""
+    # Normalizacja do 0-1
+    img = rgb_image.astype(float) / 255.0
+    
+    r = img[..., 0]
+    g = img[..., 1]
+    b = img[..., 2]
+    
+    max_c = np.max(img, axis=2)
+    min_c = np.min(img, axis=2)
+    delta = max_c - min_c
+    
+    L = (max_c + min_c) / 2.0
+    
+    S = np.zeros_like(L)
+    # S = delta / (1 - |2L - 1|)  dla L != 0,1
+    # Uważamy na dzielenie przez zero
+    mask_l = (L > 0) & (L < 1)
+    S[mask_l] = delta[mask_l] / (1 - np.abs(2 * L[mask_l] - 1))
+    
+    H = np.zeros_like(L)
+    # H calculation
+    mask_delta = delta > 0
+    
+    # r is max
+    mask_r = mask_delta & (max_c == r)
+    H[mask_r] = ((g[mask_r] - b[mask_r]) / delta[mask_r]) % 6
+    
+    # g is max
+    mask_g = mask_delta & (max_c == g)
+    H[mask_g] = ((b[mask_g] - r[mask_g]) / delta[mask_g]) + 2
+    
+    # b is max
+    mask_b = mask_delta & (max_c == b)
+    H[mask_b] = ((r[mask_b] - g[mask_b]) / delta[mask_b]) + 4
+    
+    H = H * 60.0
+    H[H < 0] += 360.0
+    
+    return np.dstack((H, S, L))
+
+def rgb_to_luv(rgb_image):
+    """Konwertuje obraz RGB do CIE Luv (D65)."""
+    # Najpierw do XYZ
+    xyz = rgb_to_xyz(rgb_image)
+    
+    # Stałe dla D65
+    Xn, Yn, Zn = WHITE_POINT_D65
+    
+    # Denominator for u', v'
+    denom = xyz[..., 0] + 15 * xyz[..., 1] + 3 * xyz[..., 2]
+    denom[denom == 0] = 1e-10 # Avoid division by zero
+    
+    u_prime = (4 * xyz[..., 0]) / denom
+    v_prime = (9 * xyz[..., 1]) / denom
+    
+    denom_n = Xn + 15 * Yn + 3 * Zn
+    un_prime = (4 * Xn) / denom_n
+    vn_prime = (9 * Yn) / denom_n
+    
+    # L* (identyczne jak w Lab)
+    y_im = xyz[..., 1] / Yn
+    L = np.zeros_like(y_im)
+    
+    epsilon = 216/24389
+    kappa = 24389/27
+    
+    mask = y_im > epsilon
+    L[mask] = 116 * np.cbrt(y_im[mask]) - 16
+    L[~mask] = kappa * y_im[~mask]
+    
+    u = 13 * L * (u_prime - un_prime)
+    v = 13 * L * (v_prime - vn_prime)
+    
+    return np.dstack((L, u, v))
+
+def rgb_to_ycbcr(rgb_image):
+    """Konwertuje RGB do YCbCr (standard JPEG/JFIF)."""
+    # Y  =  0.299*R + 0.587*G + 0.114*B
+    # Cb = -0.1687*R - 0.3313*G + 0.5*B + 128
+    # Cr =  0.5*R - 0.4187*G - 0.0813*B + 128
+    
+    img = rgb_image.astype(float)
+    R = img[..., 0]
+    G = img[..., 1]
+    B = img[..., 2]
+    
+    Y = 0.299 * R + 0.587 * G + 0.114 * B
+    Cb = -0.168736 * R - 0.331264 * G + 0.5 * B + 128
+    Cr = 0.5 * R - 0.418688 * G - 0.081312 * B + 128
+    
+    return np.dstack((Y, Cb, Cr))
+
+
+
+def colorize_channel(channel_data, channel_type, grayscale=False):
     """
-    Tworzy wizualizację kanału w kolorze.
-    channel_type: 'X', 'Y_XYZ', 'Z' (addytywne) lub 'C', 'M', 'Yellow', 'K' (substraktywne)
-                  lub 'L', 'a', 'b' (Lab)
+    Tworzy wizualizację kanału w kolorze lub skali szarości.
     """
     h, w = channel_data.shape
 
-    # --- RZECZYWISTA WIZUALIZACJA LAB → RGB ---
-    # Jeśli prosimy o '*_rgb', to traktujemy channel_data jako wartości Lab (surowe)
-    # i konstruujemy obraz Lab, po czym konwertujemy go prawidłowo do sRGB.
+    # -- Special handling for conversion previews (raw Lab/XYZ/RGB) --
     if isinstance(channel_type, str) and channel_type.endswith('_rgb'):
-        # Nie stosujemy normalizacji tutaj - oczekujemy wartości w skali Lab
         if channel_type == 'L_rgb':
-            L = channel_data.astype(np.float64)
-            # Dopasuj skalę jeśli L w 0..1
-            if L.max() <= 1.01:
-                L = L * 100.0
-            lab_img = np.dstack((L, np.zeros_like(L), np.zeros_like(L)))
-            return lab_to_rgb(lab_img)
-
-        if channel_type == 'a_rgb':
-            a = channel_data.astype(np.float64)
-            # Jeśli dane są znormalizowane 0..1 -> mapuj na [-128,128]
-            if a.max() <= 1.01 and a.min() >= -1e-9:
-                a = (a - 0.5) * 2.0 * 128.0
-            L = np.full_like(a, 50.0)
-            b = np.zeros_like(a)
-            lab_img = np.dstack((L, a, b))
-            return lab_to_rgb(lab_img)
-
-        if channel_type == 'b_rgb':
-            b = channel_data.astype(np.float64)
-            if b.max() <= 1.01 and b.min() >= -1e-9:
-                b = (b - 0.5) * 2.0 * 128.0
-            L = np.full_like(b, 50.0)
-            a = np.zeros_like(b)
-            lab_img = np.dstack((L, a, b))
-            return lab_to_rgb(lab_img)
+            L = channel_data.copy()
+            if L.max() <= 1.01: L = L * 100.0
+            return lab_to_rgb(np.dstack((L, np.zeros_like(L), np.zeros_like(L))))
+        return colorize_channel(channel_data, channel_type.replace('_rgb', ''), grayscale)
 
     norm = (channel_data - channel_data.min()) / (channel_data.max() - channel_data.min() + 1e-10)
-
-    output = np.zeros((h, w, 3), dtype=np.uint8)
     val = (norm * 255).astype(np.uint8)
+    
+    # Jeśli tryb szarości -> zwracamy po prostu intensywność
+    if grayscale:
+        return np.dstack((val, val, val))
+
     inv_val = 255 - val 
+    output = np.zeros((h, w, 3), dtype=np.uint8)
 
-    # --- PRZESTRZEŃ XYZ (Addytywna - świecenie) ---
-    if channel_type == 'X': # Pseudo-Red
+    # --- PRZESTRZEŃ RGB (Decomposition) ---
+    if channel_type == 'R':
         output[..., 0] = val
-    
-    elif channel_type == 'Y_XYZ': # LUMINANCJA (XYZ) - To jest "jasność", oko widzi ją najbardziej jako zieleń
+    elif channel_type == 'G':
         output[..., 1] = val
-        
-    elif channel_type == 'Z': # Pseudo-Blue
+    elif channel_type == 'B':
         output[..., 2] = val
         
-    # --- PRZESTRZEŃ CMYK (Substraktywna - tusz) ---
-    elif channel_type == 'C': # Cyan
-        output[..., 0] = inv_val
-        output[..., 1] = 255
-        output[..., 2] = 255
-    elif channel_type == 'M': # Magenta
-        output[..., 0] = 255
-        output[..., 1] = inv_val
-        output[..., 2] = 255
-        
-    # TUTAJA BYŁ BŁĄD: Wcześniej 'Y' łapało się wyżej jako Y_XYZ (zielony)
-    elif channel_type == 'Yellow': # Żółty (CMYK)
-        output[..., 0] = 255
-        output[..., 1] = 255
-        output[..., 2] = inv_val # B jest zabierane
-        
-    elif channel_type == 'K': # Black
-        output[..., 0] = inv_val
-        output[..., 1] = inv_val
-        output[..., 2] = inv_val
-
-    # --- PRZESTRZEŃ LAB (Perceptualna) ---
-    elif channel_type == 'L': # Lightness (jasność) - wyświetlamy jako szarość
+    # --- PRZESTRZEŃ XYZ ---
+    elif channel_type == 'X':
         output[..., 0] = val
+    elif channel_type == 'Y_XYZ': 
         output[..., 1] = val
+    elif channel_type == 'Z': 
         output[..., 2] = val
+        
+    # --- PRZESTRZEŃ CMYK ---
+    elif channel_type == 'C':
+        output[..., 0] = inv_val; output[..., 1] = 255; output[..., 2] = 255
+    elif channel_type == 'M':
+        output[..., 0] = 255; output[..., 1] = inv_val; output[..., 2] = 255
+    elif channel_type == 'Yellow':
+        output[..., 0] = 255; output[..., 1] = 255; output[..., 2] = inv_val
+    elif channel_type == 'K':
+        output[..., 0] = inv_val; output[..., 1] = inv_val; output[..., 2] = inv_val
+
+    # --- PRZESTRZEŃ LAB / LUV ---
+    elif channel_type in ['L', 'L_hsl', 'L_luv']: # Jasność - szary
+        output[..., 0] = val; output[..., 1] = val; output[..., 2] = val
     
-    elif channel_type == 'a': # a* (zielony←→czerwony) - negatywne=zielony, pozytywne=czerwony
-        # Normalizujemy tak, że środek (128) = 0
-        # Wartości < 128 = zielony, > 128 = czerwony
-        output[..., 0] = (norm * 255).astype(np.uint8)  # czerwony
-        output[..., 1] = ((1 - norm) * 255).astype(np.uint8)  # Zielony
-        output[..., 2] = 128  # Neutralnie
-    
-    elif channel_type == 'b': # b* (niebieski←→żółty) - negatywne=niebieski, pozytywne=żółty
-        # Wartości < 128 = niebieski, > 128 = żółty
-        output[..., 0] = (norm * 255).astype(np.uint8)  # Żółty
-        output[..., 1] = (norm * 255).astype(np.uint8)  # Żółty
-        output[..., 2] = ((1 - norm) * 255).astype(np.uint8)  # Niebieski
+    elif channel_type == 'a': # Lab a* (Green-Red)
+        output[..., 0] = (norm * 255).astype(np.uint8) 
+        output[..., 1] = ((1 - norm) * 255).astype(np.uint8)
+        output[..., 2] = 128
+        
+    elif channel_type == 'b': # Lab b* (Blue-Yellow)
+        output[..., 0] = (norm * 255).astype(np.uint8)
+        output[..., 1] = (norm * 255).astype(np.uint8) 
+        output[..., 2] = ((1 - norm) * 255).astype(np.uint8)
+
+    # --- PRZESTRZEŃ HSL ---
+    elif channel_type == 'H': # Hue
+        # Vectorized HSV->RGB for visualization
+        h_ = norm * 6.0
+        x = (1 - np.abs(h_ % 2 - 1))
+        
+        r_ = np.zeros_like(h_); g_ = np.zeros_like(h_); b_ = np.zeros_like(h_)
+        
+        mask = (h_ < 1); r_[mask]=1; g_[mask]=x[mask]
+        mask = (h_ >= 1) & (h_ < 2); r_[mask]=x[mask]; g_[mask]=1
+        mask = (h_ >= 2) & (h_ < 3); g_[mask]=1; b_[mask]=x[mask]
+        mask = (h_ >= 3) & (h_ < 4); g_[mask]=x[mask]; b_[mask]=1
+        mask = (h_ >= 4) & (h_ < 5); r_[mask]=x[mask]; b_[mask]=1
+        mask = (h_ >= 5); r_[mask]=1; b_[mask]=x[mask]
+        
+        output[..., 0] = (r_ * 255).astype(np.uint8)
+        output[..., 1] = (g_ * 255).astype(np.uint8)
+        output[..., 2] = (b_ * 255).astype(np.uint8)
+
+    elif channel_type == 'S': # Saturation
+        # User example shows Saturation as a "Red" image (Monochrome Red)
+        if grayscale:
+             output[..., 0] = val; output[..., 1] = val; output[..., 2] = val
+        else:
+            # Visualization as Red intensity
+            output[..., 0] = val
+            output[..., 1] = 0
+            output[..., 2] = 0
+        
+    # --- PRZESTRZEŃ LUV ---
+    elif channel_type == 'u': # u* (Green-Red approx)
+        output[..., 0] = (norm * 255).astype(np.uint8) 
+        output[..., 1] = ((1 - norm) * 255).astype(np.uint8) 
+        output[..., 2] = 128
+        
+    elif channel_type == 'v': # v* (Blue-Yellow approx)
+        output[..., 0] = (norm * 255).astype(np.uint8) 
+        output[..., 1] = (norm * 255).astype(np.uint8) 
+        output[..., 2] = ((1 - norm) * 255).astype(np.uint8)
+
+    # --- PRZESTRZEŃ YCbCr ---
+    elif channel_type == 'Y_ycbcr': # Luminancja - grayscale
+        output[..., 0] = val; output[..., 1] = val; output[..., 2] = val
+
+    elif channel_type == 'Cb': # (Blue-Yellowish difference)
+        # Low Cb = Yellow/Green, High Cb = Blue
+        # Approximation for visualization:
+        # Map 0..255 Cb to Blue-Yellow
+        output[..., 0] = ((1-norm) * 255).astype(np.uint8)
+        output[..., 1] = ((1-norm) * 255).astype(np.uint8)
+        output[..., 2] = (norm * 255).astype(np.uint8)
+
+    elif channel_type == 'Cr': # (Red-Greenish difference)
+        # Low Cr = Green/Cyan, High Cr = Red
+        output[..., 0] = (norm * 255).astype(np.uint8)
+        output[..., 1] = ((1-norm) * 255).astype(np.uint8)
+        output[..., 2] = ((1-norm) * 255).astype(np.uint8)
         
     return output

@@ -44,6 +44,18 @@ class LanguageManager:
                 'ch_l': 'Jasność (L*)',
                 'ch_a': 'Zielony-Czerwony (a*)',
                 'ch_b': 'Niebieski-Żółty (b*)',
+                'grayscale_view': 'Widok w skali szarości',
+                'ch_h': 'Barwa (H)',
+                'ch_s': 'Nasycenie (S)',
+                'ch_l_hsl': 'Jasność (L)',
+                'ch_l_luv': 'Jasność (L*)',
+                'ch_u': 'Oś Zielony-Czerwony (u*)',
+                'ch_v': 'Oś Niebieski-Żółty (v*)',
+                # YCbCr
+                'ch_y_ycbcr': 'Luminancja (Y)',
+                'ch_cb': 'Różnica Niebieska (Cb)',
+                'ch_cr': 'Różnica Czerwona (Cr)',
+
             },
             'EN': {
                 'window_title': 'RGB → CIE XYZ / CMYK Conversion',
@@ -85,6 +97,17 @@ class LanguageManager:
                 'ch_l': 'Lightness (L*)',
                 'ch_a': 'Green-Red (a*)',
                 'ch_b': 'Blue-Yellow (b*)',
+                'grayscale_view': 'Grayscale View',
+                'ch_h': 'Hue (H)',
+                'ch_s': 'Saturation (S)',
+                'ch_l_hsl': 'Lightness (L)',
+                'ch_l_luv': 'Lightness (L*)',
+                'ch_u': 'Green-Red Axis (u*)',
+                'ch_v': 'Blue-Yellow Axis (v*)',
+                'ch_y_ycbcr': 'Luminance (Y)',
+                'ch_cb': 'Blue Difference (Cb)',
+                'ch_cr': 'Red Difference (Cr)',
+
             }
         }
     
