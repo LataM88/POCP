@@ -5,7 +5,7 @@ import datetime # Potrzebne do generowania unikalnych nazw plików
 
 from gui.display_area import DisplayArea
 from gui.language_manager import LanguageManager
-from conversion.converters import rgb_to_xyz, rgb_to_cmyk, rgb_to_lab, rgb_to_hsl, rgb_to_luv, rgb_to_ycbcr, colorize_channel
+from conversion.converters import rgb_to_xyz, rgb_to_cmyk, rgb_to_lab, rgb_to_hsl, rgb_to_ycbcr, colorize_channel
 from image_processing.image_loader import load_image, array_to_pil, save_image
 
 class MainWindow(tk.Tk):
@@ -53,7 +53,7 @@ class MainWindow(tk.Tk):
         
         self.mode_var = tk.StringVar(value="XYZ")
         # Zmiana: Przywrócenie XYZ/LUV
-        self.mode_combo = ttk.Combobox(control_frame, textvariable=self.mode_var, values=["XYZ", "CMYK", "LAB", "HSL", "LUV", "YCbCr"], state="readonly", width=10)
+        self.mode_combo = ttk.Combobox(control_frame, textvariable=self.mode_var, values=["XYZ", "CMYK", "LAB", "HSL", "YCbCr"], state="readonly", width=10)
         self.mode_combo.pack(side='left', padx=5)
         
         # Checkbox dla trybu szarości
@@ -178,9 +178,7 @@ class MainWindow(tk.Tk):
                 hsl = rgb_to_hsl(self.current_image)
                 raw_channels = {'H': hsl[:,:,0], 'S': hsl[:,:,1], 'L': hsl[:,:,2]}
 
-            elif mode == "LUV":
-                luv = rgb_to_luv(self.current_image)
-                raw_channels = {'L': luv[:,:,0], 'u': luv[:,:,1], 'v': luv[:,:,2]}
+
 
             elif mode == "YCbCr":
                 ycbcr = rgb_to_ycbcr(self.current_image)
@@ -223,7 +221,6 @@ class MainWindow(tk.Tk):
             'X': 'X', 'Y': 'Y_XYZ', 'Z': 'Z',
             'C': 'C', 'M': 'M',  'K': 'K', # Yellow handled below
             'L': 'L', 'a': 'a', 'b': 'b',
-            'u': 'u', 'v': 'v',
             'H': 'H', 'S': 'S',
             'Y_ycbcr': 'Y_ycbcr', 'Cb': 'Cb', 'Cr': 'Cr'
         }
@@ -238,7 +235,6 @@ class MainWindow(tk.Tk):
             elif mode == 'XYZ' and key == 'Y': ctype = 'Y_XYZ'
             elif mode == 'YCbCr' and key == 'Y': ctype = 'Y_ycbcr'
             elif mode == 'HSL' and key == 'L': ctype = 'L_hsl'
-            elif mode == 'LUV' and key == 'L': ctype = 'L_luv'
             elif key in channel_type_map: ctype = channel_type_map[key]
             
             res_array = colorize_channel(data, ctype, grayscale=is_grayscale)
@@ -256,8 +252,7 @@ class MainWindow(tk.Tk):
             self.display_area.setup_layout_lab(pil_original, generated_imgs['L'], generated_imgs['a'], generated_imgs['b'])
         elif mode == "HSL":
             self.display_area.setup_layout_hsl(pil_original, generated_imgs['H'], generated_imgs['S'], generated_imgs['L'])
-        elif mode == "LUV":
-            self.display_area.setup_layout_luv(pil_original, generated_imgs['L'], generated_imgs['u'], generated_imgs['v'])
+
         elif mode == "YCbCr":
             self.display_area.setup_layout_ycbcr(pil_original, generated_imgs['Y'], generated_imgs['Cb'], generated_imgs['Cr'])
 

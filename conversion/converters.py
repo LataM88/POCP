@@ -169,40 +169,7 @@ def rgb_to_hsl(rgb_image):
     
     return np.dstack((H, S, L))
 
-def rgb_to_luv(rgb_image):
-    """Konwertuje obraz RGB do CIE Luv (D65)."""
-    # Najpierw do XYZ
-    xyz = rgb_to_xyz(rgb_image)
-    
-    # Stałe dla D65
-    Xn, Yn, Zn = WHITE_POINT_D65
-    
-    # Denominator for u', v'
-    denom = xyz[..., 0] + 15 * xyz[..., 1] + 3 * xyz[..., 2]
-    denom[denom == 0] = 1e-10 # Avoid division by zero
-    
-    u_prime = (4 * xyz[..., 0]) / denom
-    v_prime = (9 * xyz[..., 1]) / denom
-    
-    denom_n = Xn + 15 * Yn + 3 * Zn
-    un_prime = (4 * Xn) / denom_n
-    vn_prime = (9 * Yn) / denom_n
-    
-    # L* (identyczne jak w Lab)
-    y_im = xyz[..., 1] / Yn
-    L = np.zeros_like(y_im)
-    
-    epsilon = 216/24389
-    kappa = 24389/27
-    
-    mask = y_im > epsilon
-    L[mask] = 116 * np.cbrt(y_im[mask]) - 16
-    L[~mask] = kappa * y_im[~mask]
-    
-    u = 13 * L * (u_prime - un_prime)
-    v = 13 * L * (v_prime - vn_prime)
-    
-    return np.dstack((L, u, v))
+
 
 def rgb_to_ycbcr(rgb_image):
     """Konwertuje RGB do YCbCr (standard JPEG/JFIF)."""
@@ -274,7 +241,7 @@ def colorize_channel(channel_data, channel_type, grayscale=False):
         output[..., 0] = inv_val; output[..., 1] = inv_val; output[..., 2] = inv_val
 
     # --- PRZESTRZEŃ LAB / LUV ---
-    elif channel_type in ['L', 'L_hsl', 'L_luv']: # Jasność - szary
+    elif channel_type in ['L', 'L_hsl']: # Jasność - szary
         output[..., 0] = val; output[..., 1] = val; output[..., 2] = val
     
     elif channel_type == 'a': # Lab a* (Green-Red)
@@ -317,15 +284,7 @@ def colorize_channel(channel_data, channel_type, grayscale=False):
             output[..., 2] = 0
         
     # --- PRZESTRZEŃ LUV ---
-    elif channel_type == 'u': # u* (Green-Red approx)
-        output[..., 0] = (norm * 255).astype(np.uint8) 
-        output[..., 1] = ((1 - norm) * 255).astype(np.uint8) 
-        output[..., 2] = 128
-        
-    elif channel_type == 'v': # v* (Blue-Yellow approx)
-        output[..., 0] = (norm * 255).astype(np.uint8) 
-        output[..., 1] = (norm * 255).astype(np.uint8) 
-        output[..., 2] = ((1 - norm) * 255).astype(np.uint8)
+
 
     # --- PRZESTRZEŃ YCbCr ---
     elif channel_type == 'Y_ycbcr': # Luminancja - grayscale

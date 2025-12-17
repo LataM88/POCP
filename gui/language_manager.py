@@ -48,9 +48,7 @@ class LanguageManager:
                 'ch_h': 'Barwa (H)',
                 'ch_s': 'Nasycenie (S)',
                 'ch_l_hsl': 'Jasność (L)',
-                'ch_l_luv': 'Jasność (L*)',
-                'ch_u': 'Oś Zielony-Czerwony (u*)',
-                'ch_v': 'Oś Niebieski-Żółty (v*)',
+
                 # YCbCr
                 'ch_y_ycbcr': 'Luminancja (Y)',
                 'ch_cb': 'Różnica Niebieska (Cb)',
@@ -101,9 +99,7 @@ class LanguageManager:
                 'ch_h': 'Hue (H)',
                 'ch_s': 'Saturation (S)',
                 'ch_l_hsl': 'Lightness (L)',
-                'ch_l_luv': 'Lightness (L*)',
-                'ch_u': 'Green-Red Axis (u*)',
-                'ch_v': 'Blue-Yellow Axis (v*)',
+
                 'ch_y_ycbcr': 'Luminance (Y)',
                 'ch_cb': 'Blue Difference (Cb)',
                 'ch_cr': 'Red Difference (Cr)',
