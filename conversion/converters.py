@@ -274,16 +274,12 @@ def colorize_channel(channel_data, channel_type, grayscale=False):
         output[..., 2] = (b_ * 255).astype(np.uint8)
 
     elif channel_type == 'S': # Saturation
-        # User example shows Saturation as a "Red" image (Monochrome Red)
-        if grayscale:
-             output[..., 0] = val; output[..., 1] = val; output[..., 2] = val
-        else:
-            # Visualization as Red intensity
-            output[..., 0] = val
-            output[..., 1] = 0
-            output[..., 2] = 0
+        # Standardowa wizualizacja nasycenia (skala szarości)
+        output[..., 0] = val
+        output[..., 1] = val
+        output[..., 2] = val
         
-    # --- PRZESTRZEŃ LUV ---
+    
 
 
     # --- PRZESTRZEŃ YCbCr ---
