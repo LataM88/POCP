@@ -16,7 +16,14 @@ class MainWindow(tk.Tk):
         self.lang = LanguageManager()
         self.title(self.lang.get('window_title'))
         # Maksymalizacja okna dla lepszej widoczności przy dużym skalowaniu (np. 225%)
-        self.state('zoomed') 
+        #self.state('zoomed') 
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        #zmiana na sztywno w razie w
+        #self.geometry(f"{screen_width - 85}x{screen_height - 85}
+        # Wysokość na 90% ekranu
+        new_height = int(screen_height * 0.9)
+        self.geometry(f"{screen_width - 85}x{new_height}+0+0") 
         
         self.current_image = None
         self.current_image_path = None
@@ -281,4 +288,5 @@ class MainWindow(tk.Tk):
             self.lang.get('dialog_success'), 
             self.lang.get('success_saved', count=saved_count, path=self.convert_folder, files="")
         )
+        os.startfile(self.convert_folder)
         self.update_status('status_saved', color="green")
